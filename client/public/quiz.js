@@ -1,27 +1,22 @@
-﻿// In deze variabelen wordt de 'state' van de quiz bijgehouden.
-let vragen = [];
+﻿const mogelijkeAntwoordenRadioOptions = document.querySelectorAll('#vragen input[type="radio"]');
+
+// In deze variabelen wordt de 'state' van de quiz bijgehouden.
 let huidigeVraagIndex = -1;
 let antwoorden = [];
-let mogelijkeAntwoordenRadioOptions = document.querySelectorAll('#vragen input[type="radio"]');
 
 // Deze fetch wordt uitgevoerd van zodra de browser dit quiz.js bestand heeft ingeladen.
 // De vragen worden opgehaald via een GET Ajax call naar de backend.
-// Opgelet: de callbacks in de then()'s worden asynchroon uitgevoerd!
-fetch('/api/quiz')
-    .then((response) => response.json())
-    .then((v) => {
-        // In v zit een array van vraag-objecten.
-        vragen = v;         // De vragen worden 'onthouden' zodat we de backend even niet meer moeten storen...
-        gaNaarVolgende();   // En vervolgens wordt de eerste vraag getoond. (De gaNaarVolgende() function zal eerst huidigeVraagIndex++ doen, dus de index gaat van -1 naar 0.)
-    });
+// Opgelet: await kan hier op het 'root' niveau gebruikt worden zonder IIFE omdat het script aan de html is toegevoegd met het attribuut type="module".
+let response = await fetch('/api/quiz');
+let vragen = await response.json(); // De vragen worden 'onthouden' zodat we de backend niet meer moeten storen...
+await gaNaarVolgende(); // En vervolgens wordt de eerste vraag getoond. (De gaNaarVolgende() function zal eerst huidigeVraagIndex++ doen, dus de index gaat van -1 naar 0.)
 
 // Vervolgens wordt er een 'change' event handler gekoppeld aan alle radio options...
-// (Ter info: de GET Ajax call kan op dit moment nog steeds bezig zijn. Maar dat kan geen kwaad want deze code is niet afhankelijk van het resultaat van die GET call.)
-// Als de speler een antwoord kiest zal onderstaande handler dus afgaan: deze pusht een QuizAntwoord object op de array van antwoorden.
+// Als de speler een antwoord kiest zal onderstaande handler dus afgaan: deze pusht een antwoord object op de array van antwoorden.
 // Daarna wordt er naar de volgende vraag gegaan of naar het resultaat indien er geen vragen meer zijn. Ook hier zorgt gaNaarVolgende() function voor.
 for (let i = 0; i < mogelijkeAntwoordenRadioOptions.length; i++) {
     // Het selecteren van een radio option triggert een 'change' event.
-    mogelijkeAntwoordenRadioOptions[i].addEventListener('change', function (e) {
+    mogelijkeAntwoordenRadioOptions[i].addEventListener('change', async function (e) {
         // Het antwoord van de speler wordt 'onthouden' in de array. Deze array zal later doorgestuurd worden via een POST Ajax call.
         antwoorden.push({
             vraagId: vragen[huidigeVraagIndex].id,
@@ -29,14 +24,13 @@ for (let i = 0; i < mogelijkeAntwoordenRadioOptions.length; i++) {
         });
 
         // ga naar de volgende vraag of toon de resultaten.
-        gaNaarVolgende();
+        await gaNaarVolgende();
     });
 }
 
 // Deze functie gaat naar de volgende vraag.
 // Of als er geen vragen meer zijn wordt het resultaat getoond.
-// (Ter info: de GET Ajax call kan op dit moment nog steeds bezig zijn. Maar dat kan geen kwaad want deze code wordt pas een eerste keer aangeroepen in de then() op lijn 13.
-function gaNaarVolgende() {
+async function gaNaarVolgende() {
     // Naar de volgende vraag gaan.
     huidigeVraagIndex++;
 
@@ -55,21 +49,20 @@ function gaNaarVolgende() {
     } else {
         // Er zijn geen vragen meer... 
         // Het resultaat kan nu door de backend berekend worden.
-        fetch('/api/quiz', {
+        let response = await fetch('/api/quiz', {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(antwoorden) // Bemerk dat hier gewoon de antwoorden array naar JSON wordt omgezet.
-            })
-            .then((response) => response.json()) // En de POST geeft ook weer een JSON terug. Dit moet omgezet worden naar een JavaScript object.
-            .then((resultaat) => {
-                // Het 'resultaat' object heeft een 'score' property.
-                document.querySelector("#resultaat h2").innerText = resultaat.score > 80 ? "Gewonnen!" : "Verloren :(";
-                document.querySelector("#resultaat h2").className = resultaat.score > 80 ? "bg-success" : "bg-danger";
-                document.getElementById("score").innerText = Math.round(resultaat.score);
-                document.getElementById("vragen").className = "hidden"; // De section 'vragen' mag nu verborgen worden.
-                document.getElementById("resultaat").className = ""; // En de section 'resultaat' kan getoond worden.
-        });
+                body: JSON.stringify(antwoorden) // Hier wordt de antwoorden array naar JSON omgezet.
+            });
+        let resultaat = await response.json(); // En de POST geeft ook weer een JSON terug. Dit moet omgezet worden naar een JavaScript object.
+
+        // Het 'resultaat' object heeft een 'score' property.
+        document.querySelector("#resultaat h2").innerText = resultaat.score > 80 ? "Gewonnen!" : "Verloren :(";
+        document.querySelector("#resultaat h2").className = resultaat.score > 80 ? "bg-success" : "bg-danger";
+        document.getElementById("score").innerText = Math.round(resultaat.score);
+        document.getElementById("vragen").className = "hidden"; // De section 'vragen' mag nu verborgen worden.
+        document.getElementById("resultaat").className = ""; // En de section 'resultaat' kan getoond worden.
     }
 }
